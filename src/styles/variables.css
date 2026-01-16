@@ -1,0 +1,39 @@
+:root {
+  /* Colors */
+  --color-bg-main: #0a0a0a;
+  --color-bg-secondary: #1a1a1a;
+  --color-bg-tertiary: #252525;
+  
+  --color-text-primary: #e0e0e0;
+  --color-text-secondary: #a0a0a0;
+  --color-text-muted: #606060;
+
+  --color-accent: #ff6b35; /* Safety Orange */
+  --color-accent-hover: #ff8c60;
+  --color-danger: #ef4444;
+  --color-success: #10b981;
+
+  /* Grid/Map */
+  --grid-cell-size: 64px;
+  --grid-gap: 2px;
+  
+  /* Typography */
+  --font-main: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Animation */
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+body {
+  background-color: var(--color-bg-main);
+  color: var(--color-text-primary);
+  font-family: var(--font-main);
+  margin: 0;
+  overflow: hidden; /* Prevent scrolling during game */
+  user-select: none; /* Prevent text selection */
+}
+
+* {
+  box-sizing: border-box;
+}

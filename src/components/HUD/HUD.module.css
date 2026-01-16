@@ -1,0 +1,100 @@
+.hudContainer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    pointer-events: none;
+    /* Let clicks pass through to grid */
+    display: flex;
+    justify-content: space-between;
+    padding: 1rem;
+    z-index: 100;
+}
+
+.phaseInfo {
+    background: rgba(0, 0, 0, 0.7);
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    color: var(--color-text-primary);
+    border: 1px solid #333;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    /* Ensure tight fit */
+    width: fit-content;
+    height: fit-content;
+}
+
+.timer {
+    font-size: 2rem;
+    font-weight: bold;
+    color: var(--color-text-primary);
+    background: rgba(0, 0, 0, 0.8);
+    padding: 0.5rem 1.5rem;
+    border-radius: 8px;
+    border: 2px solid var(--color-accent);
+    line-height: 1;
+    /* Tight line height */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Ensure tight fit */
+    width: fit-content;
+    height: fit-content;
+
+    /* Pulse animation when low */
+}
+
+.timer.low {
+    color: var(--color-danger);
+    border-color: var(--color-danger);
+    animation: pulse 0.5s infinite alternate;
+}
+
+@keyframes pulse {
+    from {
+        transform: scale(1);
+    }
+
+    to {
+        transform: scale(1.1);
+    }
+}
+
+.playerStats {
+    background: rgba(0, 0, 0, 0.7);
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    border: 1px solid #333;
+    text-align: right;
+    pointer-events: auto;
+    /* Allow clicking buttons inside */
+}
+
+.apValue {
+    color: var(--color-accent);
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+
+.cancelButton {
+    margin-top: 0.5rem;
+    padding: 0.3rem 0.8rem;
+    background-color: var(--color-danger);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: opacity 0.2s;
+}
+
+.cancelButton:hover {
+    opacity: 0.9;
+}
+
+.cancelButton:disabled {
+    background-color: #555;
+    cursor: not-allowed;
+    opacity: 0.5;
+}

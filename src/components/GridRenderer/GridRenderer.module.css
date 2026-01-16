@@ -1,0 +1,98 @@
+.gridContainer {
+    display: grid;
+    gap: var(--grid-gap);
+    background-color: var(--color-bg-tertiary);
+    padding: 1rem;
+    overflow: auto;
+    position: relative;
+    /* Centering */
+    margin: 0 auto;
+}
+
+.tile {
+    width: var(--grid-cell-size);
+    height: var(--grid-cell-size);
+    background-color: var(--color-bg-secondary);
+    border: 1px solid #333;
+    position: relative;
+    transition: all 0.2s ease;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+}
+
+.tile:hover {
+    border-color: var(--color-accent);
+    z-index: 10;
+}
+
+/* Terrain Types */
+.tile[data-type="WALL"] {
+    background-color: #444;
+    /* Simple 3D effect */
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+.tile[data-type="MUD"] {
+    background-color: #5d4037;
+}
+
+.tile[data-type="STAIRS"] {
+    background-color: #f59e0b;
+    /* Amber */
+}
+
+/* Path Preview */
+.tile.pathNode {
+    background-color: rgba(255, 107, 53, 0.2);
+    /* Accent color transparent */
+    border-color: var(--color-accent);
+}
+
+.tile.pathNode::after {
+    content: '';
+    width: 8px;
+    height: 8px;
+    background-color: var(--color-accent);
+    border-radius: 50%;
+    position: absolute;
+}
+
+/* Hide dot for start/player position but keep highlight */
+/* Using !important to ensure it overrides specific pathNode::after rules */
+.tile.pathStart::after {
+    display: none !important;
+}
+
+/* Unreachable Path (AP Limit) */
+.tile.pathNodeUnreachable {
+    background-color: rgba(100, 100, 100, 0.2);
+    border-color: #666;
+    border-style: dashed;
+}
+
+.tile.pathNodeUnreachable::after {
+    background-color: #666;
+}
+
+/* Unit Representation (Temporary until sprites) */
+.unit {
+    width: 80%;
+    height: 80%;
+    border-radius: 50%;
+    border: 2px solid white;
+    transition: transform 0.3s var(--ease-spring);
+    z-index: 20;
+}
+
+.unitPlayer {
+    background-color: var(--color-accent);
+    box-shadow: 0 0 10px var(--color-accent);
+}
+
+.unitEnemy {
+    background-color: var(--color-danger);
+}

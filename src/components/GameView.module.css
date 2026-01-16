@@ -1,0 +1,9 @@
+.gameView {
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+    background-color: var(--color-bg-main);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
