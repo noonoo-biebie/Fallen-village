@@ -29,10 +29,16 @@ function getHeuristic(a: Coordinate, b: Coordinate): number {
     return (dx + dy) + (1.5 - 2) * Math.min(dx, dy);
 }
 
+// dynamicObstacles: Coordinates of units.
+// Rule: Moving THROUGH a unit costs 2 extra AP? Or set cost TO 2?
+// User said: "적이 있는 칸을 넘어 갈때는 2AP가 소모되는 거야" (Passing through costs 2AP).
+// And "대신 적이 있는 칸을 목표로 할 수는 없어" (Can't end on unit).
+
 export const findPath = (
     start: Coordinate,
     end: Coordinate,
-    floorData: FloorData
+    floorData: FloorData,
+    dynamicObstacles: Coordinate[] = []
 ): Coordinate[] | null => {
     // Assume generic movement on correct floor Z
     const z = start.floor;
@@ -45,8 +51,14 @@ export const findPath = (
         return null;
     }
 
-    // Target check
+    // Target check (Static)
     if (!floorMap[end.x][end.y].metadata.walkable) {
+        return null;
+    }
+
+    // Target check (Dynamic)
+    // CANNOT end on a unit
+    if (dynamicObstacles.some(b => b.x === end.x && b.y === end.y && b.floor === z)) {
         return null;
     }
 
@@ -93,13 +105,32 @@ export const findPath = (
             if (nx < 0 || nx >= floorMap.length || ny < 0 || ny >= floorMap[0].length) continue;
 
             // Check walkable
-            // For diagonal, we might want to check adjacent cardinal blocks ("cutting corners" rule)
-            // For now, simple check target only
             if (!floorMap[nx][ny].metadata.walkable) continue;
 
             if (closedSet.has(`${nx},${ny}`)) continue;
 
-            const gScore = current.g + dir.cost;
+            // COST CALCULATION
+            let moveCost = dir.cost;
+
+            // Check if blocked by unit (Dynamic Obstacle)
+            const isOccupied = dynamicObstacles.some(b => b.x === nx && b.y === ny && b.floor === z);
+            if (isOccupied) {
+                // If occupied, we can pass through BUT cost is handled here.
+                // User said: "consumes 2AP". Is it +2 or =2?
+                // Context: "적이 있는 칸을 넘어 갈때는 2AP가 소모".
+                // Usually diagonal is 1.5, straight is 1.
+                // If we set it to 2, it's roughly double.
+                // Let's assume the cost of entering that tile becomes 2.0 regardless of angle?
+                // Or adds surcharge? Let's verify interpretation.
+                // "2AP가 소모되는 거야" -> The cost of that step is 2.
+                // So moveCost = 2.0.
+                moveCost = 2.0;
+
+                // Also, if this is the END node, we already returned null above.
+                // So we are just passing through here.
+            }
+
+            const gScore = current.g + moveCost;
             const hScore = getHeuristic({ x: nx, y: ny, floor: z }, end);
 
             // Check if node is already in openList with better g

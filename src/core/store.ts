@@ -1,78 +1,74 @@
 import { create } from 'zustand';
-import type { GameState, Coordinate, Unit, Action, FloorData, TileType } from './types';
-import { generateMap } from './mapGenerator'; // We will create this next
-
-interface GameActions {
-    // Initialization
-    initGame: (seed?: number) => void;
-
-    // Phase Control
-    setPhase: (phase: 'DECISION' | 'EXECUTION') => void;
-    updateTimer: (deltaTime: number) => void;
-
-    // Units
-    addUnit: (unit: Unit) => void;
-    updateUnitPosition: (unitId: string, position: Coordinate) => void;
-    updateUnitStatus: (unitId: string, status: Partial<Unit['status']>) => void;
-
-    // Action Queue
-    queueAction: (action: Action) => void;
-    cancelAction: () => void;
-    clearActionQueue: () => void;
-}
+import type { GameState, GameActions, Coordinate, Unit, Action } from './types';
+import { generateMap } from './mapGenerator';
+import { decideEnemyActions } from './ai';
+import { calculateSimpleFOV } from './fov';
 
 // Initial State
 const initialState: GameState = {
     floor: [],
     units: {},
-    players: {}, // To be typed properly if needed
     phase: 'DECISION',
-    timer: 5.0, // 5 seconds decision time
+    timer: 5.0,
     actionQueue: [],
     seed: 0,
+    visibleTiles: new Set(),
+    exploredTiles: new Set(),
+    debugFow: false,
+    damageEvents: []
 };
 
 export const useGameStore = create<GameState & GameActions>((set, get) => ({
     ...initialState,
 
     initGame: (seed = Date.now()) => {
-        const floor = generateMap(seed);
-        const startX = Math.floor(floor[0].length / 2);
-        const startY = Math.floor(floor[0][0].length / 2);
+        const { floor, units } = generateMap(seed);
+        const player = Object.values(units).find(u => u.type === 'PLAYER');
 
-        const playerUnit: Unit = {
-            id: 'player-1',
-            type: 'PLAYER',
-            name: 'Survivor',
-            position: { x: startX, y: startY, floor: 0 },
-            status: { hp: 100, maxHp: 100, ap: 10, maxAp: 10, isInjured: false },
-            facing: 'DOWN'
-        };
+        let visible = new Set<string>();
+        let explored = new Set<string>();
+
+        if (player) {
+            visible = calculateSimpleFOV(player.position, player.status.sightRange, floor);
+            explored = new Set(visible);
+        }
 
         set({
             ...initialState,
             seed,
             floor,
-            units: { [playerUnit.id]: playerUnit },
+            units,
+            visibleTiles: visible,
+            exploredTiles: explored
         });
     },
 
-    setPhase: (phase) => {
+    setPhase: (newPhase) => {
         set((state) => {
-            const updates: Partial<GameState> = { phase };
-
-            // Recover AP on start of DECISION phase
-            if (phase === 'DECISION') {
-                const newUnits = { ...state.units };
-                Object.keys(newUnits).forEach(id => {
-                    const unit = { ...newUnits[id] };
-                    const recoveredAp = Math.min(unit.status.maxAp, unit.status.ap + 5);
-                    unit.status = { ...unit.status, ap: recoveredAp };
-                    newUnits[id] = unit;
+            if (newPhase === 'DECISION') {
+                const updatedUnits = { ...state.units };
+                Object.keys(updatedUnits).forEach(key => {
+                    const u = updatedUnits[key];
+                    const recovery = u.status.apRecovery || 5;
+                    const currentAp = u.status.ap || 0;
+                    updatedUnits[key] = {
+                        ...u,
+                        status: {
+                            ...u.status,
+                            ap: Math.min(currentAp + recovery, u.status.maxAp)
+                        }
+                    };
                 });
-                updates.units = newUnits;
+                return { phase: newPhase, timer: 5.0, units: updatedUnits };
             }
-            return updates;
+
+            if (newPhase === 'EXECUTION') {
+                const aiActions = decideEnemyActions(state);
+                const combinedQueue = [...state.actionQueue, ...aiActions];
+                return { phase: newPhase, actionQueue: combinedQueue };
+            }
+
+            return { phase: newPhase };
         });
     },
 
@@ -91,12 +87,28 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     updateUnitPosition: (unitId, position) => set((state) => {
         const unit = state.units[unitId];
         if (!unit) return {};
-        return {
+
+        const updates: Partial<GameState> = {
             units: {
                 ...state.units,
                 [unitId]: { ...unit, position }
             }
         };
+
+        // FOW Update for Player
+        if (unit.type === 'PLAYER') {
+            const range = unit.status.sightRange;
+            const newVisible = calculateSimpleFOV(position, range, state.floor);
+
+            // Merge with explored
+            const newExplored = new Set(state.exploredTiles);
+            newVisible.forEach(key => newExplored.add(key));
+
+            updates.visibleTiles = newVisible;
+            updates.exploredTiles = newExplored;
+        }
+
+        return updates;
     }),
 
     updateUnitStatus: (unitId, status) => set((state) => {
@@ -111,15 +123,10 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     }),
 
     queueAction: (action) => set((state) => {
-        // Deduct AP if needed
         let newUnits = state.units;
         if (action.cost > 0) {
             const unit = state.units[action.unitId];
             if (unit) {
-                if (unit.status.ap < action.cost) {
-                    console.warn("Not enough AP");
-                    return {}; // Cancel if not enough AP (Should be prevented by UI)
-                }
                 newUnits = {
                     ...state.units,
                     [action.unitId]: {
@@ -129,7 +136,6 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
                 };
             }
         }
-
         return {
             actionQueue: [...state.actionQueue, action],
             units: newUnits
@@ -138,11 +144,9 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
     cancelAction: () => set((state) => {
         if (state.actionQueue.length === 0) return {};
-
         const lastAction = state.actionQueue[state.actionQueue.length - 1];
         const newQueue = state.actionQueue.slice(0, -1);
 
-        // Refund AP
         let newUnits = state.units;
         if (lastAction.cost > 0) {
             const unit = state.units[lastAction.unitId];
@@ -156,7 +160,6 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
                 };
             }
         }
-
         return {
             actionQueue: newQueue,
             units: newUnits
@@ -164,4 +167,44 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     }),
 
     clearActionQueue: () => set({ actionQueue: [] }),
+
+    toggleDebugFow: () => set(state => ({ debugFow: !state.debugFow })),
+
+    applyDamage: (targetId, amount) => set((state) => {
+        const target = state.units[targetId];
+        if (!target) return {};
+
+        const newHp = target.status.hp - amount;
+
+        // Add Damage Event for UI
+        const eventId = crypto.randomUUID();
+        const damageEvent = {
+            id: eventId,
+            position: { ...target.position }, // Snapshot position
+            amount,
+            timestamp: Date.now()
+        };
+
+        // Death Logic
+        let newUnits = { ...state.units };
+        if (newHp <= 0) {
+            delete newUnits[targetId];
+            console.log(`Unit ${targetId} died.`);
+        } else {
+            newUnits[targetId] = {
+                ...target,
+                status: { ...target.status, hp: newHp, isInjured: newHp < target.status.maxHp * 0.5 }
+            };
+        }
+
+        return {
+            units: newUnits,
+            damageEvents: [...state.damageEvents, damageEvent]
+        };
+    }),
+
+    removeDamageEvent: (eventId) => set((state) => ({
+        damageEvents: state.damageEvents.filter(e => e.id !== eventId)
+    })),
+
 }));
