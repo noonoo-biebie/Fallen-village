@@ -72,12 +72,18 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         });
     },
 
-    updateTimer: (deltaTime) => {
-        set((state) => {
-            if (state.phase !== 'DECISION') return {};
-            const newTimer = Math.max(0, state.timer - deltaTime);
-            return { timer: newTimer };
-        });
+    updateTimer: (dt) => {
+        const state = get();
+        if (state.phase !== 'DECISION') return;
+
+        const newTime = Math.max(0, state.timer - dt);
+
+        if (newTime <= 0) {
+            set({ timer: 0 });
+            get().setPhase('EXECUTION');
+        } else {
+            set({ timer: newTime });
+        }
     },
 
     addUnit: (unit) => set((state) => ({
@@ -206,5 +212,29 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     removeDamageEvent: (eventId) => set((state) => ({
         damageEvents: state.damageEvents.filter(e => e.id !== eventId)
     })),
+
+    toggleSneak: (unitId) => set((state) => {
+        const unit = state.units[unitId];
+        if (!unit) return {};
+
+        const currentMode = unit.status.movementMode || 'RUN';
+        const newMode = currentMode === 'RUN' ? 'SNEAK' : 'RUN';
+        // Default noise is 3. Sneak is 0.
+        const newNoise = newMode === 'SNEAK' ? 0 : 3;
+
+        return {
+            units: {
+                ...state.units,
+                [unitId]: {
+                    ...unit,
+                    status: {
+                        ...unit.status,
+                        movementMode: newMode,
+                        noiseLevel: newNoise
+                    }
+                }
+            }
+        };
+    }),
 
 }));

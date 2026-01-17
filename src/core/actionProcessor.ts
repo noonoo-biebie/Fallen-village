@@ -35,6 +35,8 @@ export const executeTurn = async () => {
             await executeMoveAction(action);
         } else if (action.type === 'ATTACK') {
             await executeAttackAction(action);
+        } else if (action.type === 'CLIMB') {
+            await executeClimbAction(action);
         }
     }
 
@@ -49,59 +51,48 @@ const executeMoveAction = async (action: Action) => {
     const unit = store.units[action.unitId];
     if (!unit || !action.target) return;
 
-    // Recalculate path dynamically
     const { findPath } = await import('./pathfinding');
 
-    // We pass empty blockedTiles here because we want to TRY to move along the planned path
-    // and stop if blocked dynamically (collision), rather than finding a new path mid-move?
-    // Actually, 'executeTurn' is non-interactive. Units follow their committed plan.
-    // If blocked, they stop.
-    const path = findPath(unit.position, action.target, store.floor, []);
+    const path = findPath(
+        unit.position,
+        action.target,
+        store.floor,
+        Object.values(store.units),
+        unit.id
+    );
 
     if (!path) return;
 
-    // Move step by step
-    // Skip the first node (current position)
     for (let i = 1; i < path.length; i++) {
         const nextPos = path[i];
 
         // DYNAMIC COLLISION CHECK
-        // Fetch fresh state because other units might have moved during await
         const currentStore = useGameStore.getState();
-        const isBlocked = Object.values(currentStore.units).some(u =>
-            u.id !== unit.id && // Not self
+        const blocker = Object.values(currentStore.units).find(u =>
+            u.id !== unit.id &&
             u.position.x === nextPos.x &&
             u.position.y === nextPos.y &&
             u.position.floor === nextPos.floor
         );
 
-        // Conflict Policy:
-        // - Allow passing through (but we already paid extra AP in planning).
-        // - Disallow stopping on occupied tile.
-        // - So, only checking collision if this is the FINAL DESTINATION of this move step?
-        // But pathfinding returned a path. If we stop mid-way, we might stop ON an enemy if we get blocked later?
-        // "Unreachable" means we can't target it.
-        // So we should be able to walk over.
+        if (blocker) {
+            const isDestination = (i === path.length - 1);
 
-        // Wait, if we stop on a unit because AP ran out? 
-        // Logic: Path planner ensures we have AP to reach 'target'.
-        // So we just need to ensure 'target' is not blocked.
-        // But 'target' might become blocked dynamically.
-        // If target is blocked, we stop 1 tile before?
-
-        if (isBlocked) {
-            // If it's the target tile, we can't enter.
-            if (i === path.length - 1) {
+            if (isDestination) {
                 console.log(`Unit ${unit.id} blocked at destination ${nextPos.x},${nextPos.y}`);
                 break;
             }
-            // Else (Passing through), allow it.
+
+            // Pass-through Logic
+            if (unit.type === 'PLAYER' && blocker.type === 'ENEMY') {
+                // Allow pass through
+            } else {
+                console.log(`Unit ${unit.id} blocked by ${blocker.id}`);
+                break;
+            }
         }
 
-        // Update Unit Position
         store.updateUnitPosition(unit.id, nextPos);
-
-        // Wait for animation
         await wait(STEP_DELAY_MS);
     }
 };
@@ -115,7 +106,12 @@ const executeAttackAction = async (action: Action) => {
 
     if (!attacker || !target) return;
 
-    // Check Range at Execution Time
+    // Check Range and Floor
+    if (attacker.position.floor !== target.position.floor) {
+        console.log(`${attacker.id} cannot attack ${target.id} (Different Floor)`);
+        return;
+    }
+
     const dist = Math.abs(attacker.position.x - target.position.x) + Math.abs(attacker.position.y - target.position.y);
     if (dist > 1) {
         console.log(`${attacker.id} missed attack on ${target.id} (Out of range)`);
@@ -138,6 +134,35 @@ const executeAttackAction = async (action: Action) => {
 
     // Hit Delay
     await wait(STEP_DELAY_MS);
+};
+
+const executeClimbAction = async (action: Action) => {
+    const store = useGameStore.getState();
+    const unit = store.units[action.unitId];
+    if (!unit) return;
+
+    const { x, y, floor } = unit.position;
+    const tile = store.floor[floor][x][y];
+
+    let targetFloor = floor;
+    if (tile.type === 'STAIRS_UP') targetFloor = floor + 1;
+    else if (tile.type === 'STAIRS_DOWN') targetFloor = floor - 1;
+    else {
+        console.log("Not on stairs!");
+        return;
+    }
+
+    if (store.floor[targetFloor]) {
+        console.log(`${unit.id} Climbs to floor ${targetFloor}`);
+        // Animation delay
+        await wait(STEP_DELAY_MS);
+
+        store.updateUnitPosition(unit.id, { x, y, floor: targetFloor });
+
+        await wait(STEP_DELAY_MS);
+    } else {
+        console.log("Invalid floor target");
+    }
 };
 
 const endExecution = () => {

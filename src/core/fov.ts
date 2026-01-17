@@ -136,7 +136,7 @@ export const calculateSimpleFOV = (
     const width = floor.length;
     const height = floor[0].length;
 
-    visibleTiles.add(`${origin.x},${origin.y}`);
+    visibleTiles.add(`${origin.x},${origin.y},${origin.floor}`);
 
     // Cast rays to all perimeter tiles of the box (range * 2)
     // Or just 360 degrees
@@ -158,7 +158,7 @@ export const calculateSimpleFOV = (
             // Bounds
             if (tx < 0 || tx >= width || ty < 0 || ty >= height) break;
 
-            visibleTiles.add(`${tx},${ty}`);
+            visibleTiles.add(`${tx},${ty},${origin.floor}`);
 
             // Check Block
             if (floor[tx][ty].metadata.opacity >= 1) {

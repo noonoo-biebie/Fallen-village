@@ -2,12 +2,11 @@ import React, { useEffect } from 'react';
 import { useGameStore } from '../core/store';
 import { GridRenderer } from './GridRenderer/GridRenderer';
 import { HUD } from './HUD/HUD';
+import { ActionMenu } from './HUD/ActionMenu';
 import styles from './GameView.module.css';
 
-
-
 export const GameView: React.FC = () => {
-    const { updateTimer, phase, setPhase, actionQueue } = useGameStore();
+    const { updateTimer, phase } = useGameStore();
 
     // Game Loop for Timer
     useEffect(() => {
@@ -20,18 +19,6 @@ export const GameView: React.FC = () => {
 
             // Update Timer
             updateTimer(delta);
-
-            // Check Timer Expiry -> Execution
-            // Note: This logic should ideally be in the store or a controller, 
-            // but putting here for React loop simplicity first.
-            // We need to access value from store, but hook gives snapshot.
-            // Zustand `useGameStore.getState()` is better for loop logic.
-            const currentState = useGameStore.getState();
-
-            if (currentState.phase === 'DECISION' && currentState.timer <= 0) {
-                useGameStore.getState().setPhase('EXECUTION');
-                // Trigger execution logic (will be handled by another effect)
-            }
 
             frameId = requestAnimationFrame(loop);
         };
@@ -47,12 +34,13 @@ export const GameView: React.FC = () => {
                 executeTurn();
             });
         }
-    }, [phase]); // Only run when phase changes to EXECUTION
+    }, [phase]);
 
     return (
         <div className={styles.gameView}>
-            <GridRenderer />
             <HUD />
+            <GridRenderer />
+            <ActionMenu />
         </div>
     );
 };

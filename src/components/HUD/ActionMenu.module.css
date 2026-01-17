@@ -1,0 +1,61 @@
+.container {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    width: 200px;
+    background-color: rgba(0, 0, 0, 0.85);
+    border: 2px solid #555;
+    border-radius: 8px;
+    padding: 10px;
+    color: white;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    /* High z-index to sit on top */
+    font-family: 'Courier New', Courier, monospace;
+}
+
+.header {
+    border-bottom: 1px solid #777;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    font-weight: bold;
+    text-align: center;
+    color: var(--color-accent, #ff6b35);
+}
+
+.buttonList {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.actionButton {
+    background: #333;
+    color: white;
+    border: 1px solid #666;
+    padding: 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+    font-size: 0.9rem;
+}
+
+.actionButton:hover:not(:disabled) {
+    background: #444;
+    border-color: white;
+}
+
+.actionButton.active {
+    border-color: var(--color-accent, #ff6b35);
+    background-color: #444;
+    color: var(--color-accent, #ff6b35);
+    font-weight: bold;
+    box-shadow: 0 0 5px rgba(255, 107, 53, 0.3);
+}
+
+.actionButton:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    border-style: dashed;
+}

@@ -21,7 +21,7 @@ class PRNG {
 
 const MAP_WIDTH = 20;
 const MAP_HEIGHT = 20;
-const FLOORS = 1; // Start with 1 floor, expandable to 3D
+const FLOORS = 2; // Enabled 2 Floors
 
 export const generateMap = (seed: number): { floor: FloorData; units: Record<string, Unit> } => {
     const prng = new PRNG(seed);
@@ -56,12 +56,11 @@ export const generateMap = (seed: number): { floor: FloorData; units: Record<str
         floors.push(floorLayer);
     }
 
-    // Post-processing: Ensure 5x5 start area is clear (for consistency)
-    // Center is roughly 10,10 based on MAP_WIDTH
+    // Post-processing: Ensure 5x5 start area is clear on 1st Floor
     const centerX = Math.floor(MAP_WIDTH / 2);
     const centerY = Math.floor(MAP_HEIGHT / 2);
 
-    // Clear start area
+    // Clear start area (Floor 0)
     for (let x = centerX - 2; x <= centerX + 2; x++) {
         for (let y = centerY - 2; y <= centerY + 2; y++) {
             if (x >= 0 && x < MAP_WIDTH && y >= 0 && y < MAP_HEIGHT) {
@@ -74,6 +73,25 @@ export const generateMap = (seed: number): { floor: FloorData; units: Record<str
             }
         }
     }
+
+    // --- STAIRS GENERATION ---
+    // Place stairs roughly away from center
+    let sx = centerX, sy = centerY;
+    while (Math.abs(sx - centerX) < 5 && Math.abs(sy - centerY) < 5) {
+        sx = prng.range(1, MAP_WIDTH - 2);
+        sy = prng.range(1, MAP_HEIGHT - 2);
+    }
+
+    // Floor 0: Up
+    floors[0][sx][sy].type = 'STAIRS_UP';
+    floors[0][sx][sy].metadata.walkable = true;
+    floors[0][sx][sy].metadata.opacity = 0;
+
+    // Floor 1: Down
+    floors[1][sx][sy].type = 'STAIRS_DOWN';
+    floors[1][sx][sy].metadata.walkable = true;
+    floors[1][sx][sy].metadata.opacity = 0;
+
 
     // Spawn Player
     const player: Unit = {
@@ -89,7 +107,8 @@ export const generateMap = (seed: number): { floor: FloorData; units: Record<str
             maxAp: 10,
             apRecovery: 5,
             sightRange: 10,
-            isInjured: false
+            isInjured: false,
+            noiseLevel: 3
         },
         facing: 'DOWN'
     };

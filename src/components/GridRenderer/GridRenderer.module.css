@@ -30,6 +30,40 @@
     z-index: 10;
 }
 
+/* Noise Visualization */
+.noiseOverlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 12;
+    box-sizing: border-box;
+    border: 0 solid #ffd700;
+    /* Default no border */
+    /* Use solid or dashed? User asked for "dotted/dashed". */
+    border-style: dashed;
+    border-color: #ffd700;
+    opacity: 0.8;
+}
+
+.noiseBorderTop {
+    border-top-width: 2px;
+}
+
+.noiseBorderBottom {
+    border-bottom-width: 2px;
+}
+
+.noiseBorderLeft {
+    border-left-width: 2px;
+}
+
+.noiseBorderRight {
+    border-right-width: 2px;
+}
+
 /* FOW Overlay for Dimmed Tiles */
 .tile.dimmed::after {
     content: '';
@@ -62,9 +96,9 @@
     border-color: #111;
 }
 
-.tile.unexplored>* {
+.tile.unexplored>*:not(.noiseOverlay) {
     display: none !important;
-    /* Hide content in unexplored */
+    /* Hide content in unexplored EXCEPT noise overlay */
 }
 
 /* Path Marker: Renders ABOVE the FOW overlay */
@@ -136,9 +170,31 @@
     background-color: #5d4037;
 }
 
-.tile[data-type="STAIRS"] {
+/* Stairs */
+.tile[data-type="STAIRS_UP"] {
     background-color: #f59e0b;
     /* Amber */
+    box-shadow: inset 0 0 10px #78350f;
+}
+
+.tile[data-type="STAIRS_UP"]::before {
+    content: 'UP';
+    color: white;
+    font-weight: bold;
+    font-size: 0.7rem;
+}
+
+.tile[data-type="STAIRS_DOWN"] {
+    background-color: #3b82f6;
+    /* Blue */
+    box-shadow: inset 0 0 10px #1e3a8a;
+}
+
+.tile[data-type="STAIRS_DOWN"]::before {
+    content: 'DN';
+    color: white;
+    font-weight: bold;
+    font-size: 0.7rem;
 }
 
 /* Path Preview */

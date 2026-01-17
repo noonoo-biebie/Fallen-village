@@ -24,9 +24,9 @@ export const GridRenderer: React.FC = () => {
         }
     }, [floor.length, initGame]);
 
-    const currentZ = 0;
-    const currentFloor = floor[currentZ];
     const playerUnit = Object.values(units).find(u => u.type === 'PLAYER');
+    const currentZ = playerUnit ? playerUnit.position.floor : 0;
+    const currentFloor = floor[currentZ];
 
     const obstacles = Object.values(units)
         .filter(u => u.type !== 'PLAYER')
@@ -56,7 +56,7 @@ export const GridRenderer: React.FC = () => {
         const playerAction = actionQueue.find(a => a.unitId === playerUnit.id && a.type === 'MOVE');
 
         if (playerAction && playerAction.target) {
-            const path = findPath(playerUnit.position, playerAction.target, floor, obstacles);
+            const path = findPath(playerUnit.position, playerAction.target, floor, Object.values(units), playerUnit.id);
             setQueuedPath(path);
         } else {
             setQueuedPath(null);
@@ -74,14 +74,14 @@ export const GridRenderer: React.FC = () => {
             return;
         }
 
-        const key = `${hoveredTile.x},${hoveredTile.y}`;
+        const key = `${hoveredTile.x},${hoveredTile.y},${hoveredTile.floor}`;
         if (!debugFow && !exploredTiles.has(key) && !visibleTiles.has(key)) {
             setPathPreview(null);
             return;
         }
 
         // Pass obstacles to allow passthrough (cost calc handles it)
-        const path = findPath(playerUnit.position, hoveredTile, floor, obstacles);
+        const path = findPath(playerUnit.position, hoveredTile, floor, Object.values(units), playerUnit.id);
         setPathPreview(path);
     }, [hoveredTile, playerUnit, floor, phase, actionQueue.length, units, debugFow, exploredTiles, visibleTiles]);
 
@@ -89,6 +89,10 @@ export const GridRenderer: React.FC = () => {
         if (!path || path.length < 2) return [];
         const costs: number[] = [0];
         let currentCost = 0;
+
+        const mode = playerUnit?.status.movementMode || 'RUN';
+        const multiplier = mode === 'SNEAK' ? 2 : 1;
+
         for (let i = 0; i < path.length - 1; i++) {
             const curr = path[i];
             const next = path[i + 1];
@@ -98,10 +102,13 @@ export const GridRenderer: React.FC = () => {
 
             // Check if NEXT tile is occupied by obstacle (Enemy)
             // Note: findPath already handles this logic but we need to visualize correct AP usage.
-            // If next tile has enemy, cost is 2.0.
+            // If next tile has enemy, cost is 3.0 (Pass-through).
             if (obstacles.some(o => o.x === next.x && o.y === next.y)) {
-                stepCost = 2.0;
+                stepCost = 3.0;
             }
+
+            // Apply Mode Multiplier (Sneak x2)
+            stepCost *= multiplier;
 
             currentCost += stepCost;
             costs.push(currentCost);
@@ -110,7 +117,31 @@ export const GridRenderer: React.FC = () => {
     };
 
     const handleTileClick = (coord: Coordinate) => {
-        if (phase !== 'DECISION' || !pathPreview || !playerUnit || actionQueue.length > 0) return;
+        if (phase !== 'DECISION' || !playerUnit || actionQueue.length > 0) return;
+
+        // CLIMB Logic: Interact with Stairs by clicking on self
+        if (coord.x === playerUnit.position.x && coord.y === playerUnit.position.y && coord.floor === playerUnit.position.floor) {
+            const tile = floor[coord.floor][coord.x][coord.y];
+            if (tile.type === 'STAIRS_UP' || tile.type === 'STAIRS_DOWN') {
+                // Check AP
+                if (playerUnit.status.ap < 3) {
+                    alert("Not enough AP to Climb (Cost: 3)");
+                    return;
+                }
+
+                queueAction({
+                    id: crypto.randomUUID(),
+                    type: 'CLIMB',
+                    unitId: playerUnit.id,
+                    target: coord,
+                    cost: 3,
+                    status: 'QUEUED'
+                });
+                return;
+            }
+        }
+
+        if (!pathPreview) return;
 
         const costs = calculatePathCost(pathPreview);
         const reachableIndex = costs.findIndex(c => c > playerUnit.status.ap);
@@ -144,6 +175,25 @@ export const GridRenderer: React.FC = () => {
     const activePath = queuedPath || pathPreview;
     const costs = activePath ? calculatePathCost(activePath) : [];
 
+    // --- Noise Map Calculation (Cumulative) ---
+    const noiseMap = new Set<string>();
+    const noiseLevel = playerUnit?.status.noiseLevel ?? 3;
+    const noiseSources = (activePath && activePath.length > 0)
+        ? activePath
+        : (playerUnit ? [playerUnit.position] : []);
+
+    if (playerUnit) {
+        noiseSources.forEach(source => {
+            for (let dx = -noiseLevel; dx <= noiseLevel; dx++) {
+                for (let dy = -noiseLevel; dy <= noiseLevel; dy++) {
+                    if (Math.abs(dx) + Math.abs(dy) <= noiseLevel) {
+                        noiseMap.add(`${source.x + dx},${source.y + dy}`);
+                    }
+                }
+            }
+        });
+    }
+
     return (
         <div style={{ position: 'relative' }}>
             <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 100 }}>
@@ -163,7 +213,7 @@ export const GridRenderer: React.FC = () => {
             >
                 {currentFloor.map((row, x) => (
                     row.map((tile, y) => {
-                        const tileKey = `${x},${y}`;
+                        const tileKey = `${x},${y},${currentZ}`;
 
                         const isVisible = debugFow || visibleTiles.has(tileKey);
                         const isExplored = debugFow || exploredTiles.has(tileKey);
@@ -184,6 +234,9 @@ export const GridRenderer: React.FC = () => {
                         // Show path if Explored or Visible
                         const showPath = isPath && (isVisible || isExplored);
 
+                        // Noise Visualization (Cumulative, Always Visible)
+                        const isNoise = noiseMap.has(`${x},${y}`);
+
                         const unitOnTile = Object.values(units).find(u =>
                             u.position.x === x && u.position.y === y && u.position.floor === currentZ
                         );
@@ -203,6 +256,16 @@ export const GridRenderer: React.FC = () => {
                                 onMouseLeave={() => setHoveredTile(null)}
                                 onClick={() => handleTileClick({ x, y, floor: currentZ })}
                             >
+                                {/* Noise Overlay with Directional Borders */}
+                                {isNoise && (
+                                    <div className={classNames(styles.noiseOverlay, {
+                                        [styles.noiseBorderTop]: !noiseMap.has(`${x - 1},${y}`),
+                                        [styles.noiseBorderBottom]: !noiseMap.has(`${x + 1},${y}`),
+                                        [styles.noiseBorderLeft]: !noiseMap.has(`${x},${y - 1}`),
+                                        [styles.noiseBorderRight]: !noiseMap.has(`${x},${y + 1}`),
+                                    })} />
+                                )}
+
                                 {/* Path Marker: Rendered separately to stay above FOW dimming */}
                                 {showPath && (
                                     <div className={classNames(styles.pathMarker, {
@@ -230,6 +293,13 @@ export const GridRenderer: React.FC = () => {
                                                 zIndex: 30
                                             }}>?</div>
                                         )}
+                                        {unitOnTile.type === 'ENEMY' && unitOnTile.memory?.state === 'SLEEP' && (
+                                            <div style={{
+                                                position: 'absolute', top: -22, right: -8,
+                                                color: '#aaddff', fontWeight: 'bold', textShadow: '0 0 2px black', fontSize: '1.0rem',
+                                                zIndex: 30, animation: 'floatZ 2s infinite'
+                                            }}>Zz</div>
+                                        )}
                                     </div>
                                 )}
 
@@ -256,6 +326,11 @@ export const GridRenderer: React.FC = () => {
                     @keyframes floatUp {
                         0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
                         100% { transform: translate(-50%, -150%) scale(1.5); opacity: 0; }
+                    }
+                    @keyframes floatZ {
+                        0% { transform: translate(0, 0); opacity: 0.5; }
+                        50% { transform: translate(3px, -5px); opacity: 1; }
+                        100% { transform: translate(6px, -10px); opacity: 0; }
                     }
                     @keyframes bounce {
                         from { transform: translate(-50%, 0); }
